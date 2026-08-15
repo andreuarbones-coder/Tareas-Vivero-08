@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Vivero - Tareas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        vivero: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            900: '#14532d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Ocultar scrollbar para un look más de app nativa */
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        body { -webkit-tap-highlight-color: transparent; }
+        .slide-up { animation: slideUp 0.3s ease-out forwards; }
+        @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-stone-100 text-stone-800 font-sans antialiased">
+
+    <!-- Contenedor principal simulando pantalla de celular -->
+    <div id="app" class="max-w-md mx-auto bg-stone-50 min-h-screen relative shadow-2xl overflow-hidden flex flex-col">
+        
+        <!-- Header -->
+        <header class="bg-vivero-700 text-white p-4 shadow-md z-10 sticky top-0">
+            <div class="flex justify-between items-center mb-4">
+                <h1 class="text-2xl font-bold tracking-wide"><i class="fa-solid fa-seedling mr-2"></i>Vivero Tareas</h1>
+                <button onclick="syncData()" class="p-2 rounded-full hover:bg-vivero-600 transition">
+                    <i class="fa-solid fa-rotate" id="sync-icon"></i>
+                </button>
+            </div>
+            
+            <!-- Tabs de estados -->
+            <div class="flex space-x-2 overflow-x-auto pb-1">
+                <button onclick="setFilter('Pendiente')" id="tab-Pendiente" class="flex-shrink-0 px-4 py-1 rounded-full bg-vivero-900 text-white text-sm font-medium transition">Pendientes</button>
+                <button onclick="setFilter('En progreso')" id="tab-En progreso" class="flex-shrink-0 px-4 py-1 rounded-full bg-vivero-600 text-vivero-100 text-sm font-medium transition">En Curso</button>
+                <button onclick="setFilter('Completada')" id="tab-Completada" class="flex-shrink-0 px-4 py-1 rounded-full bg-vivero-600 text-vivero-100 text-sm font-medium transition">Listas</button>
+            </div>
+        </header>
+
+        <!-- Contenedor de Tareas -->
+        <main class="flex-1 overflow-y-auto p-4 pb-24" id="task-list">
+            <!-- Las tareas se inyectarán aquí por JS -->
+            <div class="text-center text-stone-400 mt-10" id="empty-state">
+                <i class="fa-solid fa-leaf text-4xl mb-3 opacity-50"></i>
+                <p>No hay tareas en esta sección.</p>
+            </div>
+        </main>
+
+        <!-- Toast Notification (Reemplazo de alert) -->
+        <div id="toast" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-stone-800 text-white px-4 py-2 rounded-lg shadow-lg opacity-0 pointer-events-none transition-opacity duration-300 z-50 flex items-center">
+            <i id="toast-icon" class="mr-2"></i>
+            <span id="toast-msg">Mensaje</span>
+        </div>
+
+        <!-- Botón Flotante (FAB) -->
+        <button onclick="openModal()" class="absolute bottom-6 right-6 w-14 h-14 bg-vivero-500 text-white rounded-full shadow-lg shadow-vivero-500/50 flex justify-center items-center text-2xl hover:bg-vivero-600 hover:scale-105 transition transform active:scale-95 z-20">
+            <i class="fa-solid fa-plus"></i>
+        </button>
+
+        <!-- Modal para Nueva/Editar Tarea -->
+        <div id="task-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex-col justify-end max-w-md mx-auto">
+            <div class="bg-white rounded-t-3xl p-6 slide-up w-full max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-stone-800" id="modal-title">Nueva Tarea</h2>
+                    <button onclick="closeModal()" class="text-stone-400 hover:text-stone-600 text-2xl leading-none">&times;</button>
+                </div>
+                
+                <form id="task-form" onsubmit="saveTask(event)" class="space-y-4">
+                    <input type="hidden" id="task-id">
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-stone-600 mb-1">¿Qué hay que hacer?</label>
+                        <input type="text" id="task-title" required class="w-full border-2 border-stone-200 rounded-xl p-3 focus:outline-none focus:border-vivero-500 bg-stone-50" placeholder="Ej: Regar plantines de tomate">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-stone-600 mb-1">Detalles (Opcional)</label>
+                        <textarea id="task-desc" rows="2" class="w-full border-2 border-stone-200 rounded-xl p-3 focus:outline-none focus:border-vivero-500 bg-stone-50" placeholder="Usar fertilizante líquido..."></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-stone-600 mb-1">Asignado a</label>
+                            <input type="text" id="task-assignee" required class="w-full border-2 border-stone-200 rounded-xl p-3 focus:outline-none focus:border-vivero-500 bg-stone-50" placeholder="Nombre">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-stone-600 mb-1">Vencimiento</label>
+                            <input type="date" id="task-date" class="w-full border-2 border-stone-200 rounded-xl p-3 focus:outline-none focus:border-vivero-500 bg-stone-50">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-stone-600 mb-1">Prioridad</label>
+                            <select id="task-priority" class="w-full border-2 border-stone-200 rounded-xl p-3 focus:outline-none focus:border-vivero-500 bg-stone-50 appearance-none">
+                                <option value="Baja">🟢 Baja</option>
+                                <option value="Media" selected>🟡 Media</option>
+                                <option value="Alta">🔴 Alta</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-stone-600 mb-1">Estado</label>
+                            <select id="task-status" class="w-full border-2 border-stone-200 rounded-xl p-3 focus:outline-none focus:border-vivero-500 bg-stone-50 appearance-none">
+                                <option value="Pendiente">Pendiente</option>
+                                <option value="En progreso">En progreso</option>
+                                <option value="Completada">Completada</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full bg-vivero-600 text-white font-bold py-4 rounded-xl mt-4 hover:bg-vivero-700 transition active:scale-95 shadow-md">
+                        Guardar Tarea
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* 
+         * CONFIGURACIÓN GOOGLE SHEETS
+         * Cuando tengas tu Google Apps Script listo, pega la URL generada aquí abajo.
+         * Mientras esté vacía, la app funcionará usando la memoria del teléfono (localStorage).
+         */
+        const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzJr3LfRs2cNMPoNIyHrsQYudlg6mvJdUM04VCf90acqSUOqiERJDOne7vSel8PlcY/exec"; 
+
+        // Estado de la app
+        let tasks = [];
+        let currentFilter = 'Pendiente';
+
+        // Inicialización
+        window.onload = () => {
+            // Cargar fecha de hoy por defecto en el form
+            document.getElementById('task-date').valueAsDate = new Date();
+            loadTasks();
+        };
+
+        async function loadTasks() {
+            showToast("Cargando tareas...", "fa-spinner fa-spin");
+            
+            if (GOOGLE_APPS_SCRIPT_URL) {
+                try {
+                    const response = await fetch(GOOGLE_APPS_SCRIPT_URL);
+                    tasks = await response.json();
+                    showToast("Sincronizado", "fa-check", 2000);
+                } catch (error) {
+                    showToast("Error de conexión, usando datos locales", "fa-triangle-exclamation", 3000);
+                    loadLocalTasks();
+                }
+            } else {
+                loadLocalTasks();
+                showToast("Modo local (Sin conexión a Sheets)", "fa-mobile-screen", 2000);
+            }
+            renderTasks();
+        }
+
+        function loadLocalTasks() {
+            const stored = localStorage.getItem('vivero_tasks');
+            if (stored) tasks = JSON.parse(stored);
+        }
+
+        function saveLocalTasks() {
+            localStorage.setItem('vivero_tasks', JSON.stringify(tasks));
+        }
+
+        async function syncData() {
+            const icon = document.getElementById('sync-icon');
+            icon.classList.add('fa-spin');
+            await loadTasks();
+            setTimeout(() => icon.classList.remove('fa-spin'), 500);
+        }
+
+        function setFilter(status) {
+            currentFilter = status;
+            
+            // Actualizar UI de los tabs
+            ['Pendiente', 'En progreso', 'Completada'].forEach(tab => {
+                const el = document.getElementById(`tab-${tab}`);
+                if (tab === status) {
+                    el.classList.replace('bg-vivero-600', 'bg-vivero-900');
+                    el.classList.replace('text-vivero-100', 'text-white');
+                } else {
+                    el.classList.replace('bg-vivero-900', 'bg-vivero-600');
+                    el.classList.replace('text-white', 'text-vivero-100');
+                }
+            });
+            renderTasks();
+        }
+
+        function renderTasks() {
+            const container = document.getElementById('task-list');
+            const emptyState = document.getElementById('empty-state');
+            
+            // Limpiar contenedor (excepto el empty state)
+            const cards = container.querySelectorAll('.task-card');
+            cards.forEach(c => c.remove());
+
+            const filteredTasks = tasks.filter(t => t.estado === currentFilter);
+
+            if (filteredTasks.length === 0) {
+                emptyState.style.display = 'block';
+                return;
+            }
+            
+            emptyState.style.display = 'none';
+
+            // Ordenar: primero las urgentes, luego por fecha
+            filteredTasks.sort((a, b) => {
+                const priorityWeight = { 'Alta': 3, 'Media': 2, 'Baja': 1 };
+                if (priorityWeight[b.prioridad] !== priorityWeight[a.prioridad]) {
+                    return priorityWeight[b.prioridad] - priorityWeight[a.prioridad];
+                }
+                return new Date(a.vencimiento) - new Date(b.vencimiento);
+            });
+
+            filteredTasks.forEach(task => {
+                const priorityColor = task.prioridad === 'Alta' ? 'text-red-500' : (task.prioridad === 'Media' ? 'text-yellow-500' : 'text-green-500');
+                
+                const card = document.createElement('div');
+                card.className = 'task-card bg-white p-4 rounded-2xl shadow-sm border border-stone-100 mb-3 relative overflow-hidden transition-all active:bg-stone-50';
+                
+                // Indicador de color lateral
+                const statusColor = task.estado === 'Completada' ? 'bg-stone-400' : 'bg-vivero-500';
+                
+                card.innerHTML = `
+                    <div class="absolute left-0 top-0 bottom-0 w-1.5 ${statusColor}"></div>
+                    <div class="ml-2">
+                        <div class="flex justify-between items-start mb-1">
+                            <h3 class="font-bold text-lg text-stone-800 leading-tight">${task.titulo}</h3>
+                            <i class="fa-solid fa-circle text-[10px] ${priorityColor} mt-1.5 ml-2"></i>
+                        </div>
+                        <p class="text-sm text-stone-500 mb-3 line-clamp-2">${task.descripcion || 'Sin detalles'}</p>
+                        
+                        <div class="flex justify-between items-center text-xs font-medium">
+                            <div class="flex items-center text-stone-600 bg-stone-100 px-2 py-1 rounded-md">
+                                <i class="fa-regular fa-user mr-1.5"></i> ${task.asignado}
+                            </div>
+                            <div class="flex items-center text-stone-500">
+                                <i class="fa-regular fa-calendar mr-1.5"></i> ${formatDate(task.vencimiento)}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Click para editar
+                card.onclick = () => editTask(task.id);
+                container.appendChild(card);
+            });
+        }
+
+        function openModal() {
+            document.getElementById('task-modal').classList.remove('hidden');
+            document.getElementById('task-modal').classList.add('flex');
+            // Reset form
+            document.getElementById('task-id').value = '';
+            document.getElementById('task-form').reset();
+            document.getElementById('task-date').valueAsDate = new Date();
+            document.getElementById('modal-title').innerText = 'Nueva Tarea';
+            document.getElementById('task-status').value = currentFilter !== 'Completada' ? currentFilter : 'Pendiente';
+        }
+
+        function closeModal() {
+            document.getElementById('task-modal').classList.add('hidden');
+            document.getElementById('task-modal').classList.remove('flex');
+        }
+
+        function editTask(id) {
+            const task = tasks.find(t => t.id === id);
+            if (!task) return;
+
+            document.getElementById('task-id').value = task.id;
+            document.getElementById('task-title').value = task.titulo;
+            document.getElementById('task-desc').value = task.descripcion;
+            document.getElementById('task-assignee').value = task.asignado;
+            document.getElementById('task-date').value = task.vencimiento;
+            document.getElementById('task-priority').value = task.prioridad;
+            document.getElementById('task-status').value = task.estado;
+            
+            document.getElementById('modal-title').innerText = 'Editar Tarea';
+            
+            document.getElementById('task-modal').classList.remove('hidden');
+            document.getElementById('task-modal').classList.add('flex');
+        }
+
+        async function saveTask(e) {
+            e.preventDefault();
+            
+            const task = {
+                id: document.getElementById('task-id').value || Date.now().toString(),
+                titulo: document.getElementById('task-title').value,
+                descripcion: document.getElementById('task-desc').value,
+                asignado: document.getElementById('task-assignee').value,
+                vencimiento: document.getElementById('task-date').value,
+                prioridad: document.getElementById('task-priority').value,
+                estado: document.getElementById('task-status').value,
+                fechaCreacion: new Date().toISOString().split('T')[0]
+            };
+
+            const existingIndex = tasks.findIndex(t => t.id === task.id);
+            if (existingIndex >= 0) {
+                tasks[existingIndex] = task;
+            } else {
+                tasks.push(task);
+            }
+
+            closeModal();
+            renderTasks();
+            
+            // Lógica de guardado
+            if (GOOGLE_APPS_SCRIPT_URL) {
+                showToast("Guardando en la nube...", "fa-spinner fa-spin");
+                try {
+                    await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                        method: 'POST',
+                        body: JSON.stringify(task)
+                    });
+                    showToast("Guardado con éxito", "fa-check", 2000);
+                } catch(error) {
+                    showToast("Error al guardar en Sheets. Guardado localmente.", "fa-xmark", 3000);
+                    saveLocalTasks();
+                }
+            } else {
+                saveLocalTasks();
+                showToast("Guardado en el teléfono", "fa-check", 2000);
+            }
+        }
+
+        // Funciones de utilidad
+        function formatDate(dateStr) {
+            if (!dateStr) return 'Sin fecha';
+            const date = new Date(dateStr + 'T12:00:00'); // Evitar desfase de zona horaria
+            return date.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
+        }
+
+        function showToast(msg, iconClass, duration = null) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            document.getElementById('toast-icon').className = `fa-solid ${iconClass}`;
+            
+            toast.classList.remove('opacity-0');
+            toast.classList.add('opacity-100');
+            
+            if(window.toastTimer) clearTimeout(window.toastTimer);
+            
+            if (duration) {
+                window.toastTimer = setTimeout(() => {
+                    toast.classList.remove('opacity-100');
+                    toast.classList.add('opacity-0');
+                }, duration);
+            }
+        }
+    </script>
+</body>
+</html>
